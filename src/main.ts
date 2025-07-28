@@ -237,4 +237,4 @@ function run() {
 // set the target to random
 // look for target - ie needs line of sight
 // https://www.redblobgames.com/pathfinding/a-star/introduction.html
-// run();
+run();
