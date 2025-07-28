@@ -1,6 +1,9 @@
 const canvas = document.getElementById("app") as HTMLCanvasElement;
 const ctx = canvas.getContext("2d") as CanvasRenderingContext2D;
 
+const multiplier = 50;
+const mapSize = 10; // 10x10, this allows us to work with flat array
+
 const map = [
   1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 1, 1, 0, 1,
   1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 1, 0, 1, 1, 0,
@@ -13,24 +16,31 @@ type Position = {
   y: number;
 };
 
-map.forEach((cell, i) => {
-  if (cell === 1) {
-    const y = Math.floor(i / 10);
-    const x = i % 10;
-    ctx.fillRect(x * 10, y * 10, 10, 10);
-  }
-});
+const drawWalls = () => {
+  ctx.fillStyle = "black";
+  map.forEach((cell, i) => {
+    if (cell === 1) {
+      const y = Math.floor(i / mapSize);
+      const x = i % mapSize;
+      ctx.fillRect(x * multiplier, y * multiplier, multiplier, multiplier);
+    }
+  });
+};
+
+const preDraw = () => {
+  drawWalls();
+};
 
 const getCell = (pos: Position) => {
-  return map[pos.y + pos.x / 10];
+  return map[pos.y + pos.x / mapSize];
 };
 
 const getNeighbours = (pos: Position) => {
   const neighbours: Array<Position> = [];
-  const up = { x: pos.x, y: pos.y - 10 };
-  const down = { x: pos.x, y: pos.y + 10 };
-  const left = { x: pos.x - 10, y: pos.y };
-  const right = { x: pos.x + 10, y: pos.y };
+  const up = { x: pos.x, y: pos.y - mapSize };
+  const down = { x: pos.x, y: pos.y + mapSize };
+  const left = { x: pos.x - mapSize, y: pos.y };
+  const right = { x: pos.x + mapSize, y: pos.y };
 
   if (getCell(up) === 0) {
     neighbours.push(up);
@@ -46,6 +56,28 @@ const getNeighbours = (pos: Position) => {
   }
 
   return neighbours;
+};
+
+const getIsValidStep = (pos: Position, direction: Direction) => {
+  const up = { x: pos.x, y: pos.y - mapSize };
+  const down = { x: pos.x, y: pos.y + mapSize };
+  const left = { x: pos.x - mapSize, y: pos.y };
+  const right = { x: pos.x + mapSize, y: pos.y };
+
+  if (direction === "up" && getCell(up) === 0) {
+    return up;
+  }
+  if (direction === "down" && getCell(down) === 0) {
+    return down;
+  }
+  if (direction === "left" && getCell(left) === 0) {
+    return left;
+  }
+  if (direction === "right" && getCell(right) === 0) {
+    return right;
+  }
+
+  return;
 };
 
 type ReachedPosition = Position & {
@@ -120,51 +152,89 @@ const getRoute = (
     //   break;
     // }
   }
-  console.log(currentPosition.x, origin.x, currentPosition.y, origin.y);
-
   return path;
 };
 
-function run() {
-  const goal = { x: 80, y: 80 };
-  const start = { x: 10, y: 10 };
-
-  const spots = breadthFirstSearch(start);
-
-  spots.forEach((spot) => {
-    ctx.fillStyle = "blue";
-    ctx.fillRect(spot.x, spot.y, 10, 10);
-    ctx.fillStyle = "red";
-    // ctx.fillText(
-    //   // getDirection(spot.origin, { x: spot.x, y: spot.y }),
-    //   spot.distance,
-    //   spot.x + 2,
-    //   spot.y + 8
-    // );
+const playerControls = (movePlayerPos: (direction: Direction) => void) => {
+  document.addEventListener("keydown", (e) => {
+    const key = e.key;
+    if (key === "ArrowUp") {
+      movePlayerPos("up");
+    }
+    if (key === "ArrowDown") {
+      movePlayerPos("down");
+    }
+    if (key === "ArrowLeft") {
+      movePlayerPos("left");
+    }
+    if (key === "ArrowRight") {
+      movePlayerPos("right");
+    }
   });
+};
 
-  // const path = getRoute(start, goal, spots).reverse()
+type Direction = "up" | "down" | "left" | "right";
+
+const player = () => {
+  const playerPos = { x: 10, y: 10 };
+  const enemyPos = { x: 80, y: 80 };
+
+  const movePlayerPos = (direction: Direction) => {
+    const nextPosition = getIsValidStep(playerPos, direction);
+    if (!nextPosition) {
+      return;
+    }
+    playerPos.x = nextPosition.x;
+    playerPos.y = nextPosition.y;
+  };
+
+  const moveEnemyPos = (x: number, y: number) => {
+    // enemyPos.x = x;
+    // enemyPos.y = y;
+  };
+
+  const getPlayerPos = () => {
+    return {
+      x: playerPos.x,
+      y: playerPos.y,
+    };
+  };
+
+  return { movePlayerPos, getPlayerPos };
+};
+
+function run() {
+  const { movePlayerPos, getPlayerPos } = player();
+  playerControls(movePlayerPos);
+  const start = { x: 80, y: 80 };
 
   // to move pos, get ta
-  console.log(getRoute(start, goal, spots).reverse());
   setInterval(() => {
-    const path = getRoute(start, goal, spots).reverse();
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    preDraw();
+    const playerPos = getPlayerPos();
+    const spots = breadthFirstSearch(start); // possible positions?
+    const path = getRoute(start, playerPos, spots).reverse();
     const nextStep = path[0];
     // console.log(path)
-    if (nextStep && !(start.x === goal.x && start.y === goal.y)) {
+    if (nextStep && !(start.x === playerPos.x && start.y === playerPos.y)) {
       start.x = nextStep.x;
       start.y = nextStep.y;
 
       // follow the arrows backwards from the goal to the start
     }
 
+    // draw enemy
     ctx.fillStyle = "red";
-    ctx.fillRect(start.x, start.y, 10, 10);
-  }, 100);
+    ctx.fillRect(start.x * 5, start.y * 5, multiplier, multiplier);
+    // draw player
+    ctx.fillStyle = "blue";
+    ctx.fillRect(playerPos.x * 5, playerPos.y * 5, multiplier, multiplier);
+  }, 500);
 }
 
 // next, move the target
 // set the target to random
 // look for target - ie needs line of sight
 // https://www.redblobgames.com/pathfinding/a-star/introduction.html
-run();
+// run();
