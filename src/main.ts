@@ -11,6 +11,16 @@ const map = [
   0, 1, 1, 0, 1, 1, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
 ] as const;
 
+const mapPositions = map.map((cell, i) => {
+  const y = Math.floor(i / mapSize) * mapSize;
+  const x = (i % mapSize) * mapSize;
+  let isWall = false;
+  if (cell === 1) {
+    isWall = true;
+  }
+  return { x, y, isWall };
+});
+
 type Position = {
   x: number;
   y: number;
@@ -33,6 +43,10 @@ const preDraw = () => {
 
 const getCell = (pos: Position) => {
   return map[pos.y + pos.x / mapSize];
+};
+
+const getIsSamePosition = (posA: Position, posB: Position) => {
+  return posA.x === posB.x && posA.y === posB.y;
 };
 
 const getNeighbours = (pos: Position) => {
@@ -177,7 +191,6 @@ type Direction = "up" | "down" | "left" | "right";
 
 const player = () => {
   const playerPos = { x: 10, y: 10 };
-  const enemyPos = { x: 80, y: 80 };
 
   const movePlayerPos = (direction: Direction) => {
     const nextPosition = getIsValidStep(playerPos, direction);
@@ -186,11 +199,6 @@ const player = () => {
     }
     playerPos.x = nextPosition.x;
     playerPos.y = nextPosition.y;
-  };
-
-  const moveEnemyPos = (x: number, y: number) => {
-    // enemyPos.x = x;
-    // enemyPos.y = y;
   };
 
   const getPlayerPos = () => {
@@ -203,30 +211,91 @@ const player = () => {
   return { movePlayerPos, getPlayerPos };
 };
 
+const generateRandomTarget = () => {
+  const validMapPositions = mapPositions.filter((pos) => !pos.isWall);
+  return validMapPositions[
+    Math.floor(Math.random() * (validMapPositions.length - 1))
+  ];
+};
+
+const enemy = () => {
+  const enemyPos: Position = { x: 80, y: 80 };
+  const targetPos: Position = { x: 80, y: 10 };
+  const moveEnemyPos = (position: Position) => {
+    enemyPos.x = position.x;
+    enemyPos.y = position.y;
+  };
+
+  const setEnemyTargetPos = (position: Position) => {
+    targetPos.x = position.x;
+    targetPos.y = position.y;
+  };
+
+  const getEnemyPos = () => {
+    return {
+      x: enemyPos.x,
+      y: enemyPos.y,
+    };
+  };
+
+  const getEnemyTargetPos = () => {
+    return {
+      x: targetPos.x,
+      y: targetPos.y,
+    };
+  };
+
+  return { moveEnemyPos, setEnemyTargetPos, getEnemyPos, getEnemyTargetPos };
+};
+
+// const enemyBehaviour = (enemyPos: Position, targetPos: Position) => {
+//   // searching = doesn't know exact position, pick random(ish?) cell, once reached, pick another
+//   // hunting - has last position
+
+//   let currentMode: "searching" | "hunting" = "searching";
+
+//   // if (currentMode === "searching") {
+//   // }
+// };
+
+const isPlayerInSight = (playerPos: Position, path: Array<Position>) => {
+  return (
+    path.every((pathPos) => pathPos.x === playerPos.x) ||
+    path.every((pathPos) => pathPos.y === playerPos.y)
+  );
+};
+
 function run() {
   const { movePlayerPos, getPlayerPos } = player();
+  const { moveEnemyPos, getEnemyPos, getEnemyTargetPos, setEnemyTargetPos } =
+    enemy();
   playerControls(movePlayerPos);
-  const start = { x: 80, y: 80 };
 
   // to move pos, get ta
   setInterval(() => {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     preDraw();
+    const enemyPos = getEnemyPos();
+    const enemyTargetPos = getEnemyTargetPos();
     const playerPos = getPlayerPos();
-    const spots = breadthFirstSearch(start); // possible positions?
-    const path = getRoute(start, playerPos, spots).reverse();
+    const spots = breadthFirstSearch(enemyPos); // name: possible positions?
+    const path = getRoute(enemyPos, enemyTargetPos, spots).reverse();
     const nextStep = path[0];
-    // console.log(path)
-    if (nextStep && !(start.x === playerPos.x && start.y === playerPos.y)) {
-      start.x = nextStep.x;
-      start.y = nextStep.y;
 
+    if (nextStep && !getIsSamePosition(playerPos, enemyPos)) {
+      moveEnemyPos({ x: nextStep.x, y: nextStep.y });
       // follow the arrows backwards from the goal to the start
+    }
+    if (isPlayerInSight(playerPos, getRoute(enemyPos, playerPos, spots))) {
+      setEnemyTargetPos(playerPos);
+    }
+    if (getIsSamePosition(enemyPos, enemyTargetPos)) {
+      setEnemyTargetPos(generateRandomTarget());
     }
 
     // draw enemy
     ctx.fillStyle = "red";
-    ctx.fillRect(start.x * 5, start.y * 5, multiplier, multiplier);
+    ctx.fillRect(enemyPos.x * 5, enemyPos.y * 5, multiplier, multiplier);
     // draw player
     ctx.fillStyle = "blue";
     ctx.fillRect(playerPos.x * 5, playerPos.y * 5, multiplier, multiplier);
